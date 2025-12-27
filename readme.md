@@ -41,9 +41,9 @@ _Let's curse each other to our heart's content!_ - Suguru Geto
 
 ## Known Bugs
 
-- Require very clear pronounciation of the keywords
-- There's a slight delay between SpeechRecognition start and start capture audio
-- Sometimes your handsigns need to be in constant slight movement to keep the microphone active
+- There's a slight delay between SpeechRecognition.start() and when it actually captures audio
+- Requires very clear pronunciation of the keywords
+- Sometimes your hand signs need to be in constant slight movement to keep the microphone active
 
 
 ## Todo
