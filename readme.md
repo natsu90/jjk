@@ -7,7 +7,7 @@ _Let's curse each other to our heart's content!_ - Suguru Geto
 
 ## Demo
 
-[JJK.SS.MY](https://jjk.ss.my)
+URL: [JJK.SS.MY](https://jjk.ss.my)
 
 ![Demo GIF](media/demo.gif)
 
