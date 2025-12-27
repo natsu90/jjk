@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="Content-Type" content="text/html" charset="utf-8" />
+  <title>JJK Domain Expansions</title>
+
+  <!-- Require the peer dependencies of handpose. -->
+  <script src="https://unpkg.com/@tensorflow/tfjs-core@4.20.0/dist/tf-core.js"></script>
+  <script src="https://unpkg.com/@tensorflow/tfjs-backend-webgl@4.21.0/dist/tf-backend-webgl.js"></script>
+
+  <!-- The main handpose library -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/hand-pose-detection@2.0.1/dist/hand-pose-detection.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.min.js"></script>
+
+  <!-- The fingerpose library -->
+   <script src="fingerpose.js" type="text/javascript"></script>
+
+  <!-- Vue.js -->
+  <script src="https://cdn.jsdelivr.net/npm/vue@2"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+      background-color: #000000;
+      color: #333333;
+    }
+
+    #app {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .container {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    #video-container {
+      width: auto;
+      height: 100vh;
+      position: relative;
+      background-color: #000000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .layer {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: auto;
+      height: 100%;
+    }
+
+    #pose-video {
+      width: auto;
+      height: 100vh;
+      object-fit: contain;
+      transform: translate(-50%, -50%) scaleX(-1);
+      position: absolute;
+      top: 50%;
+      left: 50%;
+    }
+
+    #pose-canvas {
+      pointer-events: none;
+    }
+
+    .pose-result {
+      font-size: 120px;
+      padding: 40px;
+      text-shadow: 0 0 10px rgba(0, 0, 0, 0.8);
+      pointer-events: none;
+    }
+
+    #pose-result-left {
+      text-align: left;
+    }
+
+    #pose-result-right {
+      text-align: right;
+    }
+
+    .status-message {
+      position: absolute;
+      top: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 100;
+      text-align: center;
+      padding: 15px 30px;
+      border-radius: 10px;
+      font-weight: bold;
+      font-size: 16px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    }
+
+    .status-loading {
+      background-color: #fff3cd;
+      color: #856404;
+    }
+
+    .status-ready {
+      background-color: #d4edda;
+      color: #155724;
+    }
+
+    .status-error {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+
+    .controls {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 100;
+      display: flex;
+      gap: 10px;
+    }
+
+    .controls button {
+      padding: 12px 24px;
+      font-size: 16px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      background-color: rgba(0, 123, 255, 0.9);
+      color: white;
+      font-weight: 600;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    }
+
+    .controls button:hover {
+      background-color: rgba(0, 86, 179, 0.9);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+    }
+
+    .controls button:disabled {
+      background-color: rgba(108, 117, 125, 0.9);
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .microphone-button {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 100;
+      width: 70px;
+      height: 70px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(255, 255, 255, 0.9);
+      font-size: 35px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+      transition: all 0.3s ease;
+    }
+
+    .microphone-button:hover {
+      background: rgba(255, 255, 255, 1);
+      transform: translateX(-50%) scale(1.1);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+    }
+
+    .microphone-button:active {
+      transform: translateX(-50%) scale(0.95);
+    }
+
+    .microphone-button.active {
+      background: rgba(52, 199, 89, 0.9);
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% {
+        box-shadow: 0 4px 15px rgba(52, 199, 89, 0.4);
+      }
+      50% {
+        box-shadow: 0 4px 25px rgba(52, 199, 89, 0.8);
+      }
+    }
+
+    .transcription-display {
+      position: fixed;
+      bottom: 120px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 99;
+      background: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 20px 40px;
+      border-radius: 15px;
+      font-size: 24px;
+      font-weight: 600;
+      text-align: center;
+      max-width: 80%;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(10px);
+      border: 2px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .transcription-display .transcript-text {
+      line-height: 1.4;
+    }
+
+    @keyframes blink {
+      0%, 50% {
+        opacity: 1;
+      }
+      51%, 100% {
+        opacity: 0.3;
+      }
+    }
+
+    /* Hidden video elements for different summons */
+    .summon-video {
+      display: none;
+    }
+  </style>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-fork-ribbon-css/0.2.3/gh-fork-ribbon.min.css" />
+</head>
+
+<body>
+  <a class="github-fork-ribbon" href="https://github.com/natsu90/jjk" data-ribbon="Fork me on GitHub" title="Fork me on GitHub">Fork me on GitHub</a>
+  <div id="app">
+    <div class="controls">
+      <button @click="startCamera" :disabled="cameraActive || loading">
+        {{ cameraActive ? '✓ Camera Active' : '🎥 Start Camera' }}
+      </button>
+      <button @click="stopCamera" :disabled="!cameraActive || loading">
+        ⏹️ Stop Camera
+      </button>
+    </div>
+
+    <div v-if="statusMessage" 
+         class="status-message" 
+         :class="{
+           'status-loading': status === 'loading',
+           'status-ready': status === 'ready',
+           'status-error': status === 'error'
+         }">
+      {{ statusMessage }}
+    </div>
+
+    <div class="container">
+      <div id="video-container">
+        <video ref="video" id="pose-video" class="layer" playsinline></video>
+        <canvas ref="canvas" id="pose-canvas" class="layer"></canvas>
+        <div v-if="gestureResults.left" id="pose-result-left" class="layer pose-result">
+          {{ gestureResults.left }}
+        </div>
+        <div v-if="gestureResults.right" id="pose-result-right" class="layer pose-result">
+          {{ gestureResults.right }}
+        </div>
+      </div>
+    </div>
+
+    <!-- Microphone button moved outside container with fixed positioning -->
+    <button class="microphone-button" :class="{ active: voiceCommandExpiryTime > Date.now() }" v-if="cameraActive && voiceCommandExpiryTime > Date.now()">
+        🎙️
+    </button>
+
+    <!-- Transcription display at center of screen -->
+    <div class="transcription-display" v-if="voiceCommandExpiryTime > Date.now() || transcriptionText">
+      <div class="transcript-text">{{ transcriptionText || 'Listening...' }}</div>
+    </div>
+
+    <!-- Hidden video elements for different summons -->
+    <video ref="malevolentShrineVideo" class="summon-video" playsinline muted>
+      <source src="media/malevolent-shrine.mp4" type="video/mp4">
+    </video>
+    <video ref="infiniteVoidVideo" class="summon-video" playsinline muted>
+      <source src="media/infinite-void.mp4" type="video/mp4">
+    </video>
+    <video ref="mahoragaVideo" class="summon-video" playsinline muted>
+      <source src="media/mahoraga.mp4" type="video/mp4">
+    </video>
+  </div>
+
+  <script>
+
+    const audio = new Audio('media/specialz.mp3');
+    audio.loop = true; // Make it loop
+
+    new Vue({
+      el: '#app',
+      data() {
+        return {
+          // Audio reference
+          backgroundAudio: audio,
+          
+          // Configuration
+          config: {
+            video: { width: 640, height: 480, fps: 30 }
+          },
+          
+          // State
+          cameraActive: false,
+          loading: false,
+          status: '',
+          statusMessage: '',
+          
+          // Speech Recognition
+          recognition: null,
+          isListening: false,
+          transcriptionText: '',
+          
+          // Summon Video Playback
+          isPlayingSummonVideo: false,
+          summonAnimationFrame: null,
+          currentVideoElement: null,
+          
+          // Hand tracking
+          detector: null,
+          gestureEstimator: null,
+          stream: null,
+          estimationLoop: null,
+          
+          // Finger data
+          leftHandData: {},
+          rightHandData: {},
+          gestureResults: {
+            left: '',
+            right: ''
+          },
+          voiceCommandExpiryTime: Date.now(),
+          currentTime: Date.now(),
+
+          currentSummon: null,
+          
+          // Track both hands for combined gestures
+          currentHandGestures: {
+            left: null,
+            right: null
+          },
+          
+          // Drawing config
+          fingerJoints: {
+            thumb: [0, 1, 2, 3, 4],
+            index: [0, 5, 6, 7, 8],
+            middle: [0, 9, 10, 11, 12],
+            ring: [0, 13, 14, 15, 16],
+            pinky: [0, 17, 18, 19, 20],
+          }
+        }
+      },
+      mounted() {
+        this.updateTime(); // Set initial time
+        this.timer = setInterval(this.updateTime, 100); // Update every 0.1 second
+      },
+      methods: {
+        updateTime() {
+            this.currentTime = Date.now();
+        },
+        playSummonVideo(videoRef) {
+          if (this.isPlayingSummonVideo) return;
+          
+          const summonVideo = this.$refs[videoRef];
+          const canvas = this.$refs.canvas;
+          const ctx = canvas.getContext('2d');
+          
+          this.isPlayingSummonVideo = true;
+          this.currentVideoElement = summonVideo;
+          
+          // Reset and play the video
+          summonVideo.currentTime = 0;
+          summonVideo.play().catch(err => {
+            console.error('Error playing summon video:', err);
+            this.isPlayingSummonVideo = false;
+            return;
+          });
+          
+          // Function to draw video frames to canvas
+          const drawVideoFrame = () => {
+            if (!this.isPlayingSummonVideo || summonVideo.paused || summonVideo.ended) {
+              this.isPlayingSummonVideo = false;
+              if (this.summonAnimationFrame) {
+                cancelAnimationFrame(this.summonAnimationFrame);
+                this.summonAnimationFrame = null;
+              }
+              this.currentVideoElement = null;
+              // Clear canvas after video ends
+              ctx.clearRect(0, 0, canvas.width, canvas.height);
+              return;
+            }
+            
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Calculate dimensions to cover the canvas while maintaining aspect ratio
+            const videoAspect = summonVideo.videoWidth / summonVideo.videoHeight;
+            const canvasAspect = canvas.width / canvas.height;
+            
+            let drawWidth, drawHeight, drawX, drawY;
+            
+            if (videoAspect > canvasAspect) {
+              // Video is wider than canvas
+              drawHeight = canvas.height;
+              drawWidth = drawHeight * videoAspect;
+              drawX = (canvas.width - drawWidth) / 2;
+              drawY = 0;
+            } else {
+              // Video is taller than canvas
+              drawWidth = canvas.width;
+              drawHeight = drawWidth / videoAspect;
+              drawX = 0;
+              drawY = (canvas.height - drawHeight) / 2;
+            }
+            
+            // Draw the video frame
+            ctx.drawImage(summonVideo, drawX, drawY, drawWidth, drawHeight);
+            
+            // Continue animation
+            this.summonAnimationFrame = requestAnimationFrame(drawVideoFrame);
+          };
+          
+          // Start drawing video frames
+          drawVideoFrame();
+          
+          // When video ends, stop playing
+          summonVideo.onended = () => {
+            this.isPlayingSummonVideo = false;
+            this.currentVideoElement = null;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+          };
+        },
+        
+        setupSpeechRecognition() {
+          // Check for browser support
+          const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+          
+          if (!SpeechRecognition) {
+            console.error('Speech Recognition not supported in this browser');
+            return;
+          }
+          
+          this.recognition = new SpeechRecognition();
+          this.recognition.continuous = true;
+          this.recognition.interimResults = true;
+          this.recognition.lang = 'en-US';
+          
+          this.recognition.onstart = () => {
+            console.log('Speech recognition started');
+            this.isListening = true;
+          };
+
+          this.recognition.onaudiostart = () => {
+            console.log('Speech recognition is Ready');
+          }
+          
+          this.recognition.onresult = (event) => {
+            let interimTranscript = '';
+            let finalTranscript = '';
+            
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+              const transcript = event.results[i][0].transcript;
+              if (event.results[i].isFinal) {
+                finalTranscript += transcript + ' ';
+              } else {
+                interimTranscript += transcript;
+              }
+            }
+            
+            // Update transcription text
+            this.transcriptionText = (finalTranscript + interimTranscript).trim();
+            
+            const lowerTranscript = this.transcriptionText.toLowerCase();
+            
+            // Check for "domain expansion" trigger
+            if (lowerTranscript.includes('domain expansion')) {
+              console.log('Domain Expansion detected! Current summon:', this.currentSummon);
+              
+              if (this.currentSummon === 'malevolent-shrine') {
+                console.log('Playing malevolent-shrine.mp4');
+                this.playSummonVideo('malevolentShrineVideo');
+              } else if (this.currentSummon === 'infinite-void') {
+                console.log('Playing infinite-void.mp4');
+                this.playSummonVideo('infiniteVoidVideo');
+              }
+
+              // Resume background audio when microphone is hidden
+                if (this.backgroundAudio.paused) {
+                    this.backgroundAudio.play().catch(err => {
+                        console.error('Error resuming audio:', err);
+                    });
+                    console.log('Background audio resumed');
+                }
+
+                // Keep transcription visible for 2 seconds after stopping
+                setTimeout(() => {
+                    this.transcriptionText = '';
+                }, 2000);
+              
+              // Hide microphone and stop recognition
+              this.voiceCommandExpiryTime = new Date(Date.now() - 100);
+              this.stopSpeechRecognition();
+            } 
+            // Check for "with this treasure i summon" trigger
+            else if (lowerTranscript.includes('with this treasure i summon')) {
+              console.log('With this treasure I summon detected! Current summon:', this.currentSummon);
+              
+              if (this.currentSummon === 'mahoraga') {
+                console.log('Playing mahoraga.mp4');
+                this.playSummonVideo('mahoragaVideo');
+              }
+
+              // Resume background audio when microphone is hidden
+                if (this.backgroundAudio.paused) {
+                    this.backgroundAudio.play().catch(err => {
+                        console.error('Error resuming audio:', err);
+                    });
+                    console.log('Background audio resumed');
+                }
+
+                // Keep transcription visible for 2 seconds after stopping
+                setTimeout(() => {
+                    this.transcriptionText = '';
+                }, 2000);
+              
+              // Hide microphone and stop recognition
+              this.voiceCommandExpiryTime = new Date(Date.now() - 100);
+              this.stopSpeechRecognition();
+            } else {
+                // Keep transcription visible for 1 second after stopping
+                setTimeout(() => {
+                    this.transcriptionText = '';
+                }, 1000);
+            }
+          };
+          
+          this.recognition.onerror = (event) => {
+            console.error('Speech recognition error:', event.error);
+            this.isListening = false;
+          };
+          
+          this.recognition.onend = () => {
+            console.log('Speech recognition ended');
+            this.isListening = false;
+          };
+        },
+        
+        startSpeechRecognition() {
+          if (!this.recognition) {
+            this.setupSpeechRecognition();
+          }
+          
+          this.transcriptionText = '';
+          if (this.recognition && !this.isListening) {
+            try {
+              this.recognition.start();
+            } catch (error) {
+              console.error('Error starting speech recognition:', error);
+            }
+          }
+        },
+        
+        stopSpeechRecognition() {
+          if (this.recognition && this.isListening) {
+            this.recognition.stop();
+          }
+        },
+        async startCamera() {
+          try {
+            // Start Audio
+            if (this.backgroundAudio.paused) {
+              this.backgroundAudio.play().catch(err => {
+                console.error('Error resuming audio:', err);
+              });
+              console.log('Background audio resumed');
+            } 
+
+            this.loading = true;
+            this.status = 'loading';
+            this.statusMessage = 'Requesting permissions...';
+            
+            // Request microphone permission first
+            try {
+              await navigator.mediaDevices.getUserMedia({ audio: true });
+              console.log('Microphone permission granted');
+            } catch (micError) {
+              console.warn('Microphone permission denied:', micError);
+              this.statusMessage = 'Microphone permission denied, continuing without audio...';
+              await new Promise(resolve => setTimeout(resolve, 1500));
+            }
+            
+            // Initialize camera
+            this.statusMessage = 'Starting camera...';
+            await this.initCamera();
+            
+            this.statusMessage = 'Loading AI model...';
+            
+            // Create detector
+            await this.createDetector();
+            
+            // Setup gesture estimator
+            this.setupGestureEstimator();
+            
+            // Setup speech recognition
+            this.setupSpeechRecognition();
+            
+            // Setup canvas
+            this.setupCanvas();
+            
+            // Preload all summon videos
+            this.$refs.malevolentShrineVideo.load();
+            this.$refs.infiniteVoidVideo.load();
+            this.$refs.mahoragaVideo.load();
+            
+            // Start video
+            this.$refs.video.play();
+            
+            this.cameraActive = true;
+            this.status = 'ready';
+            this.statusMessage = 'Ready! Show your hands to the camera.';
+            
+            // Start estimation loop
+            this.startEstimation();    
+            
+          } catch (error) {
+            console.error('Error starting camera:', error);
+            this.status = 'error';
+            this.statusMessage = 'Error: ' + error.message;
+          } finally {
+            this.loading = false;
+          }
+        },
+        
+        stopCamera() {
+          if (this.stream) {
+            this.stream.getTracks().forEach(track => track.stop());
+            this.stream = null;
+          }
+          
+          if (this.estimationLoop) {
+            clearTimeout(this.estimationLoop);
+            this.estimationLoop = null;
+          }
+          
+          // Stop summon video if playing
+          if (this.isPlayingSummonVideo && this.currentVideoElement) {
+            this.isPlayingSummonVideo = false;
+            this.currentVideoElement.pause();
+            if (this.summonAnimationFrame) {
+              cancelAnimationFrame(this.summonAnimationFrame);
+              this.summonAnimationFrame = null;
+            }
+            this.currentVideoElement = null;
+          }
+          
+          this.cameraActive = false;
+          this.statusMessage = '';
+          this.gestureResults = { left: '', right: '' };
+          this.leftHandData = {};
+          this.rightHandData = {};
+
+          // Stop Audio
+          if (!this.backgroundAudio.paused) {
+              this.backgroundAudio.pause(); // Pauses the playback
+          }          
+            this.backgroundAudio.currentTime = 0;    // Resets playback to the start
+          
+          // Clear canvas
+          const ctx = this.$refs.canvas.getContext('2d');
+          ctx.clearRect(0, 0, this.config.video.width, this.config.video.height);
+        },
+        
+        async initCamera() {
+          const constraints = {
+            audio: false,
+            video: {
+              facingMode: "user",
+              width: this.config.video.width,
+              height: this.config.video.height,
+              frameRate: { max: this.config.video.fps }
+            }
+          };
+          
+          const video = this.$refs.video;
+          video.width = this.config.video.width;
+          video.height = this.config.video.height;
+          
+          this.stream = await navigator.mediaDevices.getUserMedia(constraints);
+          video.srcObject = this.stream;
+          
+          return new Promise(resolve => {
+            video.onloadedmetadata = () => resolve(video);
+          });
+        },
+        
+        async createDetector() {
+          this.detector = await window.handPoseDetection.createDetector(
+            window.handPoseDetection.SupportedModels.MediaPipeHands,
+            {
+              runtime: "mediapipe",
+              modelType: "full",
+              maxHands: 2,
+              solutionPath: `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240`,
+            }
+          );
+          console.log("MediaPose model loaded");
+        },
+        
+        setupGestureEstimator() {
+          const knownGestures = [];
+          
+          // Finger Crossed Gesture
+          const fingerCrossedGesture = new fp.GestureDescription('infinite_void');
+          for(let finger of [fp.Finger.Thumb, fp.Finger.Pinky, fp.Finger.Ring]) {
+            fingerCrossedGesture.addCurl(finger, fp.FingerCurl.FullCurl, 1.0);
+            fingerCrossedGesture.addCurl(finger, fp.FingerCurl.HalfCurl, 0.9);
+          }
+          fingerCrossedGesture.addCurl(fp.Finger.Index, fp.FingerCurl.NoCurl, 1.0);
+          fingerCrossedGesture.addDirection(fp.Finger.Index, fp.FingerDirection.VerticalUp, 1.0);
+          fingerCrossedGesture.addCurl(fp.Finger.Middle, fp.FingerCurl.HalfCurl, 1.0);
+          fingerCrossedGesture.addCurl(fp.Finger.Middle, fp.FingerCurl.FullCurl, 0.3);
+          fingerCrossedGesture.addCurl(fp.Finger.Middle, fp.FingerCurl.NoCurl, 0.3);
+          knownGestures.push(fingerCrossedGesture);
+          
+          // Malevolent Shrine Left
+          const malevolentShrineLeftGesture = new fp.GestureDescription('malevolent_shrine_left');
+          for(let finger of [fp.Finger.Thumb, fp.Finger.Middle, fp.Finger.Index]) {
+            malevolentShrineLeftGesture.addCurl(finger, fp.FingerCurl.NoCurl, 1.0);
+            malevolentShrineLeftGesture.addDirection(finger, fp.FingerDirection.DiagonalUpRight, 1.0);
+          }
+          for(let finger of [fp.Finger.Ring, fp.Finger.Pinky]) {
+            malevolentShrineLeftGesture.addCurl(finger, fp.FingerCurl.FullCurl, 1.0);
+            malevolentShrineLeftGesture.addCurl(finger, fp.FingerCurl.HalfCurl, 0.9);
+            malevolentShrineLeftGesture.addDirection(finger, fp.FingerDirection.DiagonalUpRight, 1.0);
+          }
+          knownGestures.push(malevolentShrineLeftGesture);
+          
+          // Malevolent Shrine Right
+          const malevolentShrineRightGesture = new fp.GestureDescription('malevolent_shrine_right');
+          for(let finger of [fp.Finger.Thumb, fp.Finger.Middle, fp.Finger.Index]) {
+            malevolentShrineRightGesture.addCurl(finger, fp.FingerCurl.NoCurl, 1.0);
+            malevolentShrineRightGesture.addDirection(finger, fp.FingerDirection.DiagonalUpLeft, 1.0);
+          }
+          for(let finger of [fp.Finger.Ring, fp.Finger.Pinky]) {
+            malevolentShrineRightGesture.addCurl(finger, fp.FingerCurl.FullCurl, 1.0);
+            malevolentShrineRightGesture.addCurl(finger, fp.FingerCurl.HalfCurl, 0.9);
+            malevolentShrineRightGesture.addDirection(finger, fp.FingerDirection.DiagonalUpLeft, 1.0);
+          }
+          knownGestures.push(malevolentShrineRightGesture);
+
+          // Hand Fist Gesture
+          const mahoragaGesture = new fp.GestureDescription('mahoraga');
+          for(let finger of [fp.Finger.Index, fp.Finger.Middle, fp.Finger.Ring, fp.Finger.Pinky]) {
+            mahoragaGesture.addCurl(finger, fp.FingerCurl.FullCurl, 1.0);
+            mahoragaGesture.addCurl(finger, fp.FingerCurl.HalfCurl, 0.9);
+          }
+          knownGestures.push(mahoragaGesture);
+          
+          this.gestureEstimator = new fp.GestureEstimator(knownGestures);
+        },
+        
+        setupCanvas() {
+          const canvas = this.$refs.canvas;
+          canvas.width = this.config.video.width;
+          canvas.height = this.config.video.height;
+        },
+        
+        startEstimation() {
+          this.estimateHands();
+        },
+        
+        async estimateHands() {
+          if (!this.cameraActive) return;
+          
+          const video = this.$refs.video;
+          const canvas = this.$refs.canvas;
+          const ctx = canvas.getContext("2d");
+          
+          // Only clear and draw hands if not playing summon video
+          if (!this.isPlayingSummonVideo) {
+            // Clear canvas
+            ctx.clearRect(0, 0, this.config.video.width, this.config.video.height);
+            
+            try {
+              // Get hand landmarks
+              const hands = await this.detector.estimateHands(video, {
+                flipHorizontal: true
+              });
+              
+              // Reset gesture results and hand tracking
+              this.gestureResults = { left: '', right: '' };
+              this.currentHandGestures = { left: null, right: null };
+              
+              for (const hand of hands) {
+                this.drawHand(hand, ctx);
+                
+                const est = this.gestureEstimator.estimate(hand.keypoints3D, 9);
+                
+                if (est.gestures.length > 0) {
+                  // Find gesture with highest score
+                  let result = est.gestures.reduce((p, c) => {
+                    return (p.score > c.score) ? p : c;
+                  });
+                  
+                  const chosenHand = hand.handedness.toLowerCase();
+                  // Track current hand gesture for combined detection
+                  this.currentHandGestures[chosenHand] = result.name;
+                  
+                  this.updateDebugInfo(est.poseData, chosenHand);
+                }
+              }
+
+              // Check for Malevolent Shrine (both hands performing the gesture)
+              if (this.currentHandGestures.left === 'malevolent_shrine_left' && 
+                  this.currentHandGestures.right === 'malevolent_shrine_right') {
+                this.currentSummon = 'malevolent-shrine';
+                this.voiceCommandExpiryTime = new Date(Date.now() + 1000);
+              } else if (this.currentHandGestures.left === 'mahoraga' && 
+                  this.currentHandGestures.right === 'mahoraga') {
+                  this.currentSummon = 'mahoraga';
+                  this.voiceCommandExpiryTime = new Date(Date.now() + 1000)
+              } else if (this.currentHandGestures.left === 'infinite_void' || 
+                  this.currentHandGestures.right === 'infinite_void') {
+                  this.currentSummon = 'infinite-void';
+                  this.voiceCommandExpiryTime = new Date(Date.now() + 1000)
+              }
+              
+            } catch (error) {
+              console.error('Error estimating hands:', error);
+            }
+          }
+          
+          // Continue loop
+          this.estimationLoop = setTimeout(() => {
+            this.estimateHands();
+          }, 500 / this.config.video.fps);
+        },
+        
+        drawHand(hand, ctx) {
+          const landmarks = hand.keypoints;
+          
+          // Draw finger joints
+          for (let j = 0; j < Object.keys(this.fingerJoints).length; j++) {
+            let finger = Object.keys(this.fingerJoints)[j];
+            
+            for (let k = 0; k < this.fingerJoints[finger].length - 1; k++) {
+              const firstJointIndex = this.fingerJoints[finger][k];
+              const secondJointIndex = this.fingerJoints[finger][k + 1];
+              
+              ctx.beginPath();
+              ctx.moveTo(
+                landmarks[firstJointIndex].x,
+                landmarks[firstJointIndex].y
+              );
+              ctx.lineTo(
+                landmarks[secondJointIndex].x,
+                landmarks[secondJointIndex].y
+              );
+              ctx.strokeStyle = 'white';
+              ctx.lineWidth = 4;
+              ctx.stroke();
+            }
+          }
+          
+          // Draw landmarks
+          for (let i = 0; i < landmarks.length; i++) {
+            const x = landmarks[i].x;
+            const y = landmarks[i].y;
+            
+            ctx.beginPath();
+            ctx.arc(x, y, 5, 0, 3 * Math.PI);
+            ctx.fillStyle = '#00dcff';
+            ctx.fill();
+          }
+        },
+        
+        updateDebugInfo(data, hand) {
+          const handData = hand === 'left' ? 'leftHandData' : 'rightHandData';
+          const newData = {};
+          
+          for (let fingerIdx in data) {
+            newData[fingerIdx] = {
+              curl: data[fingerIdx][1],
+              direction: data[fingerIdx][2]
+            };
+          }
+          
+          this[handData] = newData;
+        }
+      },
+      
+      watch: {
+        // Watch for microphone button visibility changes
+        voiceCommandExpiryTime(newVal, oldVal) {
+          const isVisible = newVal > Date.now();
+          const wasVisible = oldVal > Date.now();
+          
+          // Start recognition when button becomes visible
+          if (isVisible && !wasVisible && this.cameraActive) {
+            this.startSpeechRecognition();
+            // Pause background audio when microphone is active
+            if (!this.backgroundAudio.paused) {
+              this.backgroundAudio.pause();
+              console.log('Background audio paused');
+            }
+          }
+
+          // Stop recognition when button becomes hidden
+          if (!isVisible && wasVisible) {
+            this.stopSpeechRecognition();
+            // Resume background audio when microphone is hidden
+            if (this.backgroundAudio.paused) {
+              this.backgroundAudio.play().catch(err => {
+                console.error('Error resuming audio:', err);
+              });
+              console.log('Background audio resumed');
+            }
+          }
+        },
+        currentTime(newVal, oldVal) {
+            const isVisible = this.voiceCommandExpiryTime > newVal;
+            const wasVisible = this.voiceCommandExpiryTime > oldVal;
+          
+          // Stop recognition when button becomes hidden
+          if (!isVisible && wasVisible) {
+            this.stopSpeechRecognition();
+            // Resume background audio when microphone is hidden
+            if (this.backgroundAudio.paused) {
+              this.backgroundAudio.play().catch(err => {
+                console.error('Error resuming audio:', err);
+              });
+              console.log('Background audio resumed');
+            }
+          }
+        }
+      },
+      
+      beforeDestroy() {
+        // Prevent memory leaks by clearing the timer
+        clearInterval(this.timer);
+        this.stopCamera();
+        this.stopSpeechRecognition();
+      }
+    });
+  </script>
+</body>
+</html>
