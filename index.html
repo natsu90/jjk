@@ -246,6 +246,96 @@
     .summon-video {
       display: none;
     }
+
+    /* Modal styles */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(10px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .modal-content {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      border-radius: 20px;
+      padding: 40px;
+      max-width: 500px;
+      width: 90%;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+      border: 2px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .modal-header {
+      font-size: 28px;
+      font-weight: bold;
+      color: #fff;
+      text-align: center;
+      margin-bottom: 30px;
+      text-shadow: 0 0 20px rgba(0, 123, 255, 0.5);
+    }
+
+    .techniques-list {
+      list-style: none;
+      margin: 0 0 30px 0;
+      padding: 0;
+    }
+
+    .technique-item {
+      background: rgba(255, 255, 255, 0.05);
+      border-left: 4px solid #007bff;
+      padding: 15px 20px;
+      margin-bottom: 15px;
+      border-radius: 8px;
+      transition: all 0.3s ease;
+    }
+
+    .technique-item:hover {
+      background: rgba(255, 255, 255, 0.1);
+      transform: translateX(5px);
+    }
+
+    .technique-name {
+      font-size: 18px;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 5px;
+    }
+
+    .technique-keyword {
+      font-size: 14px;
+      color: #adb5bd;
+      font-style: italic;
+    }
+
+    .modal-button {
+      width: 100%;
+      padding: 15px 30px;
+      font-size: 18px;
+      font-weight: 600;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+      color: white;
+      transition: all 0.3s ease;
+      box-shadow: 0 4px 15px rgba(0, 123, 255, 0.4);
+    }
+
+    .modal-button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 25px rgba(0, 123, 255, 0.6);
+    }
+
+    .modal-button:active {
+      transform: translateY(0);
+    }
   </style>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-fork-ribbon-css/0.2.3/gh-fork-ribbon.min.css" />
 </head>
@@ -253,10 +343,31 @@
 <body>
   <a class="github-fork-ribbon" href="https://github.com/natsu90/jjk" data-ribbon="Fork me on GitHub" title="Fork me on GitHub">Fork me on GitHub</a>
   <div id="app">
+    <!-- Intro Modal -->
+    <div v-if="showModal" class="modal-overlay">
+      <div class="modal-content">
+        <div class="modal-header">Supported Techniques</div>
+        <ul class="techniques-list">
+          <li class="technique-item">
+            <div class="technique-name">Malevolent Shrine</div>
+            <div class="technique-keyword">Keyword: domain expansion</div>
+          </li>
+          <li class="technique-item">
+            <div class="technique-name">Infinite Void</div>
+            <div class="technique-keyword">Keyword: domain expansion</div>
+          </li>
+          <li class="technique-item">
+            <div class="technique-name">Mahoraga</div>
+            <div class="technique-keyword">Keyword: with this treasure I summon</div>
+          </li>
+        </ul>
+        <button @click="startCameraFromModal" class="modal-button" :disabled="loading">
+          {{ loading ? 'Starting...' : '🎥 Start Camera' }}
+        </button>
+      </div>
+    </div>
+
     <div class="controls">
-      <button @click="startCamera" :disabled="cameraActive || loading">
-        {{ cameraActive ? '✓ Camera Active' : '🎥 Start Camera' }}
-      </button>
       <button @click="stopCamera" :disabled="!cameraActive || loading">
         ⏹️ Stop Camera
       </button>
@@ -318,13 +429,14 @@
         return {
           // Audio reference
           backgroundAudio: audio,
-          
+
           // Configuration
           config: {
             video: { width: 640, height: 480, fps: 30 }
           },
-          
+
           // State
+          showModal: true,
           cameraActive: false,
           loading: false,
           status: '',
@@ -589,6 +701,10 @@
             this.recognition.stop();
           }
         },
+        startCameraFromModal() {
+          this.showModal = false;
+          this.startCamera();
+        },
         async startCamera() {
           try {
             // Start Audio
@@ -597,7 +713,7 @@
                 console.error('Error resuming audio:', err);
               });
               console.log('Background audio resumed');
-            } 
+            }
 
             this.loading = true;
             this.status = 'loading';
@@ -660,12 +776,12 @@
             this.stream.getTracks().forEach(track => track.stop());
             this.stream = null;
           }
-          
+
           if (this.estimationLoop) {
             clearTimeout(this.estimationLoop);
             this.estimationLoop = null;
           }
-          
+
           // Stop summon video if playing
           if (this.isPlayingSummonVideo && this.currentVideoElement) {
             this.isPlayingSummonVideo = false;
@@ -676,7 +792,7 @@
             }
             this.currentVideoElement = null;
           }
-          
+
           this.cameraActive = false;
           this.statusMessage = '';
           this.gestureResults = { left: '', right: '' };
@@ -686,12 +802,15 @@
           // Stop Audio
           if (!this.backgroundAudio.paused) {
               this.backgroundAudio.pause(); // Pauses the playback
-          }          
+          }
             this.backgroundAudio.currentTime = 0;    // Resets playback to the start
-          
+
           // Clear canvas
           const ctx = this.$refs.canvas.getContext('2d');
           ctx.clearRect(0, 0, this.config.video.width, this.config.video.height);
+
+          // Show modal again
+          this.showModal = true;
         },
         
         async initCamera() {
@@ -739,6 +858,11 @@
             fingerCrossedGesture.addCurl(finger, fp.FingerCurl.FullCurl, 1.0);
             fingerCrossedGesture.addCurl(finger, fp.FingerCurl.HalfCurl, 0.9);
           }
+          // thumb
+          fingerCrossedGesture.addCurl(fp.Finger.Thumb, fp.FingerCurl.FullCurl, 0.3);
+          fingerCrossedGesture.addCurl(fp.Finger.Thumb, fp.FingerCurl.NoCurl, 0.3);
+          fingerCrossedGesture.addCurl(fp.Finger.Thumb, fp.FingerCurl.HalfCurl, 1.0);
+
           fingerCrossedGesture.addCurl(fp.Finger.Index, fp.FingerCurl.NoCurl, 1.0);
           fingerCrossedGesture.addDirection(fp.Finger.Index, fp.FingerDirection.VerticalUp, 1.0);
           fingerCrossedGesture.addCurl(fp.Finger.Middle, fp.FingerCurl.HalfCurl, 1.0);
