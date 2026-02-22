@@ -858,16 +858,12 @@
             fingerCrossedGesture.addCurl(finger, fp.FingerCurl.FullCurl, 1.0);
             fingerCrossedGesture.addCurl(finger, fp.FingerCurl.HalfCurl, 0.9);
           }
-          // thumb
-          fingerCrossedGesture.addCurl(fp.Finger.Thumb, fp.FingerCurl.FullCurl, 0.3);
-          fingerCrossedGesture.addCurl(fp.Finger.Thumb, fp.FingerCurl.NoCurl, 0.3);
-          fingerCrossedGesture.addCurl(fp.Finger.Thumb, fp.FingerCurl.HalfCurl, 1.0);
 
           fingerCrossedGesture.addCurl(fp.Finger.Index, fp.FingerCurl.NoCurl, 1.0);
           fingerCrossedGesture.addDirection(fp.Finger.Index, fp.FingerDirection.VerticalUp, 1.0);
+
           fingerCrossedGesture.addCurl(fp.Finger.Middle, fp.FingerCurl.HalfCurl, 1.0);
-          fingerCrossedGesture.addCurl(fp.Finger.Middle, fp.FingerCurl.FullCurl, 0.3);
-          fingerCrossedGesture.addCurl(fp.Finger.Middle, fp.FingerCurl.NoCurl, 0.3);
+          fingerCrossedGesture.addCurl(fp.Finger.Middle, fp.FingerCurl.FullCurl, 0.9);
           knownGestures.push(fingerCrossedGesture);
           
           // Malevolent Shrine Left
